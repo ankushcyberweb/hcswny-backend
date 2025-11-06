@@ -3,10 +3,10 @@ const router = express.Router();
 const authMiddleware = require("../utils/authMiddleware");
 const eventController = require("../controllers/eventController");
 
-// 🟢 Public — anyone can view approved events
-router.get("/", eventController.getAllApprovedEvents);
+// 🟢 Public — anyone can view all events
+router.get("/", eventController.getAllEvents);
 
-// 🟠 Admin — only admin can create new events
+// 🟠 Admin — only admin can create events
 router.post(
   "/",
   authMiddleware,
@@ -20,21 +20,5 @@ router.post(
   },
   eventController.createEvent
 );
-
-// 🟣 Admin — view pending/unapproved events
-router.get("/admin/pending", authMiddleware, (req, res) => {
-  if (req.user.role !== "admin") {
-    return res.status(403).json({ success: false, message: "Unauthorized" });
-  }
-  eventController.getPendingEvents(req, res);
-});
-
-// 🔵 Admin — approve/reject event
-router.post("/admin/approve", authMiddleware, (req, res) => {
-  if (req.user.role !== "admin") {
-    return res.status(403).json({ success: false, message: "Unauthorized" });
-  }
-  eventController.updateEventApproval(req, res);
-});
 
 module.exports = router;
