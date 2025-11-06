@@ -1,41 +1,40 @@
 const express = require("express");
 const router = express.Router();
-const Event = require("../models/Event");
 const authMiddleware = require("../utils/authMiddleware");
+const eventController = require("../controllers/eventController");
 
-// Create an Event (user adds event)
-router.post("/create", authMiddleware, async (req, res) => {
-  const { title, date, time } = req.body;
-  const newEvent = new Event({
-    title,
-    date,
-    time,
-    userId: req.user.id,
-    approved: false,
-  });
+// 🟢 Public — anyone can view approved events
+router.get("/", eventController.getAllApprovedEvents);
 
-  try {
-    const event = await newEvent.save();
-    res.status(201).json(event);
-  } catch (err) {
-    res.status(500).json({ msg: "Error saving event" });
+// 🟠 Admin — only admin can create new events
+router.post(
+  "/",
+  authMiddleware,
+  (req, res, next) => {
+    if (req.user.role !== "admin") {
+      return res
+        .status(403)
+        .json({ success: false, message: "Admin access only" });
+    }
+    next();
+  },
+  eventController.createEvent
+);
+
+// 🟣 Admin — view pending/unapproved events
+router.get("/admin/pending", authMiddleware, (req, res) => {
+  if (req.user.role !== "admin") {
+    return res.status(403).json({ success: false, message: "Unauthorized" });
   }
+  eventController.getPendingEvents(req, res);
 });
 
-// Approve Event (admin approval)
-router.post("/approve/:id", authMiddleware, async (req, res) => {
-  if (req.user.role !== "owner")
-    return res.status(403).json({ msg: "Unauthorized" });
-
-  const event = await Event.findById(req.params.id);
-  if (!event) return res.status(404).json({ msg: "Event not found" });
-
-  event.approved = true;
-  await event.save();
-
-  // Here, you can also send an email notification to the user
-
-  res.status(200).json({ msg: "Event approved" });
+// 🔵 Admin — approve/reject event
+router.post("/admin/approve", authMiddleware, (req, res) => {
+  if (req.user.role !== "admin") {
+    return res.status(403).json({ success: false, message: "Unauthorized" });
+  }
+  eventController.updateEventApproval(req, res);
 });
 
 module.exports = router;

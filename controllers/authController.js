@@ -1,11 +1,13 @@
 const fs = require("fs");
 const path = require("path");
+const jwt = require("jsonwebtoken");
 const { sendResetPasswordEmail } = require("../utils/emailService");
 
 const USERS_FILE = path.join(__dirname, "../users.json");
 const ADMIN_EMAIL = "ankush@cyberwebhotels.com";
+const JWT_SECRET = process.env.JWT_SECRET || "super-secret-change-this";
 
-// helper to read/write JSON
+// Helpers to read/write JSON
 const readUsers = () => {
   if (!fs.existsSync(USERS_FILE)) return [];
   return JSON.parse(fs.readFileSync(USERS_FILE, "utf8"));
@@ -13,6 +15,7 @@ const readUsers = () => {
 const writeUsers = (data) =>
   fs.writeFileSync(USERS_FILE, JSON.stringify(data, null, 2));
 
+/** REGISTER **/
 exports.register = (req, res) => {
   const { name, email, password } = req.body;
   if (!email || !password)
@@ -29,14 +32,23 @@ exports.register = (req, res) => {
   users.push(newUser);
   writeUsers(users);
 
+  const token = jwt.sign(
+    { id: newUser.id, email: newUser.email, role: newUser.role },
+    JWT_SECRET,
+    { expiresIn: "7d" }
+  );
+
   res.json({
     success: true,
     message: "Registered successfully",
-    token: "mockToken",
+    token,
     role,
+    name,
+    email,
   });
 };
 
+/** LOGIN **/
 exports.login = (req, res) => {
   const { email, password } = req.body;
   const users = readUsers();
@@ -46,15 +58,23 @@ exports.login = (req, res) => {
       .status(401)
       .json({ success: false, message: "Invalid email or password" });
 
+  const token = jwt.sign(
+    { id: user.id, email: user.email, role: user.role },
+    JWT_SECRET,
+    { expiresIn: "7d" }
+  );
+
   res.json({
     success: true,
     message: "Login successful",
-    token: "mockToken",
+    token,
     role: user.role,
+    name: user.name,
+    email: user.email,
   });
 };
 
-// ✅ Reset password route
+/** RESET PASSWORD **/
 exports.resetPassword = async (req, res) => {
   try {
     const { email } = req.body;
@@ -70,14 +90,10 @@ exports.resetPassword = async (req, res) => {
         .status(404)
         .json({ success: false, message: "User not found" });
 
-    // Generate temporary password
     const tempPassword = Math.random().toString(36).slice(-8);
-
-    // Update user’s password in JSON
     users[userIndex].password = tempPassword;
     writeUsers(users);
 
-    // Send email with temp password
     await sendResetPasswordEmail(email, tempPassword);
 
     res.json({

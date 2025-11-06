@@ -6,18 +6,17 @@ const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const nodemailer = require("nodemailer");
 
+// ---------------- INIT APP ----------------
 const app = express();
-
-// ✅ Allow CORS from any origin (safe for testing)
+app.use(express.json());
 app.use(
   cors({
-    origin: "*",
+    origin: "*", // ✅ Allow all origins for testing — tighten later if needed
   })
 );
-app.use(express.json());
 
 // ---------------- CONFIG ----------------
-const PORT = process.env.PORT || 3000; // ✅ Render provides its own PORT
+const PORT = process.env.PORT || 3000;
 const ADMIN_EMAIL = process.env.ADMIN_EMAIL || "ankush@cyberwebhotels.com";
 const ADMIN_APP_PASSWORD =
   process.env.ADMIN_APP_PASSWORD || "YOUR_GMAIL_APP_PASSWORD";
@@ -33,19 +32,32 @@ function readJSON(file, fallback = []) {
     return fallback;
   }
 }
+
 function writeJSON(file, data) {
   fs.writeFileSync(file, JSON.stringify(data, null, 2));
 }
+
 if (!fs.existsSync(USERS_FILE)) writeJSON(USERS_FILE, []);
 
-// ---------------- REGISTER ----------------
+// ---------------- AUTH HELPERS ----------------
+function createToken(user) {
+  return jwt.sign(
+    { id: user.id, email: user.email, role: user.role },
+    JWT_SECRET,
+    { expiresIn: "7d" }
+  );
+}
+
+// ---------------- AUTH ROUTES ----------------
+
+// ✅ Register new user
 app.post("/auth/register", (req, res) => {
   try {
     const { name, email, password } = req.body || {};
     if (!name || !email || !password)
       return res
         .status(400)
-        .json({ success: false, message: "Missing fields" });
+        .json({ success: false, message: "Missing required fields" });
 
     const users = readJSON(USERS_FILE);
     if (users.find((u) => u.email === email))
@@ -62,13 +74,13 @@ app.post("/auth/register", (req, res) => {
       role,
       passwordHash,
     };
+
     users.push(newUser);
     writeJSON(USERS_FILE, users);
 
     res.json({
       success: true,
       message: "User registered successfully",
-      role,
       user: { id: newUser.id, name, email, role },
     });
   } catch (err) {
@@ -77,7 +89,7 @@ app.post("/auth/register", (req, res) => {
   }
 });
 
-// ---------------- LOGIN ----------------
+// ✅ Login existing user
 app.post("/auth/login", (req, res) => {
   try {
     const { email, password } = req.body || {};
@@ -90,39 +102,24 @@ app.post("/auth/login", (req, res) => {
     const user = users.find((u) => u.email === email);
     if (!user)
       return res
-        .status(400)
+        .status(404)
         .json({ success: false, message: "User not found" });
 
-    // Support legacy plain passwords
-    let valid = false;
-    if (user.passwordHash)
-      valid = bcrypt.compareSync(password, user.passwordHash);
-    else if (user.password && user.password === password) valid = true;
-
+    const valid = bcrypt.compareSync(password, user.passwordHash);
     if (!valid)
       return res
-        .status(400)
-        .json({ success: false, message: "Invalid credentials" });
+        .status(401)
+        .json({ success: false, message: "Invalid password" });
 
-    // Upgrade to hash if needed
-    if (!user.passwordHash) {
-      user.passwordHash = bcrypt.hashSync(password, 10);
-      delete user.password;
-      writeJSON(USERS_FILE, users);
-    }
-
-    const token = jwt.sign(
-      { id: user.id, email: user.email, role: user.role },
-      JWT_SECRET,
-      { expiresIn: "7d" }
-    );
+    const token = createToken(user);
 
     res.json({
       success: true,
+      message: "Login successful",
       token,
       user: {
         id: user.id,
-        name: user.name || "User",
+        name: user.name,
         email: user.email,
         role: user.role,
       },
@@ -133,7 +130,7 @@ app.post("/auth/login", (req, res) => {
   }
 });
 
-// ---------------- RESET PASSWORD ----------------
+// ✅ Reset password (email temporary password)
 app.post("/auth/reset-password", async (req, res) => {
   const { email } = req.body || {};
   const users = readJSON(USERS_FILE);
@@ -157,8 +154,39 @@ app.post("/auth/reset-password", async (req, res) => {
     html: `<p>Your new temporary password is <b>${tempPassword}</b></p>`,
   });
 
-  res.json({ success: true, message: "Temporary password sent to your email" });
+  res.json({
+    success: true,
+    message: "Temporary password sent to your email.",
+  });
+});
+
+// ---------------- AUTH MIDDLEWARE ----------------
+function authRequired(req, res, next) {
+  const header = req.headers.authorization;
+  if (!header)
+    return res
+      .status(401)
+      .json({ success: false, message: "No token provided" });
+
+  try {
+    const token = header.split(" ")[1];
+    req.user = jwt.verify(token, JWT_SECRET);
+    next();
+  } catch {
+    return res.status(401).json({ success: false, message: "Invalid token" });
+  }
+}
+
+// ---------------- ROUTE MOUNTING ----------------
+const eventRoutes = require("./routes/eventRoutes"); // ✅ your new route file
+app.use("/events", eventRoutes);
+
+// ---------------- HEALTH CHECK ----------------
+app.get("/", (req, res) => {
+  res.send("✅ HCSWNY backend running successfully!");
 });
 
 // ---------------- START SERVER ----------------
-app.listen(PORT, () => console.log(`✅ Server running on port ${PORT}`));
+app.listen(PORT, () => {
+  console.log(`✅ Server running on port ${PORT}`);
+});
