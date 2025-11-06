@@ -3,6 +3,7 @@ const path = require("path");
 
 const EVENTS_FILE = path.join(__dirname, "..", "events_data.json");
 
+// ✅ Helper functions to read/write JSON safely
 function readJSON(file, fallback = []) {
   if (!fs.existsSync(file)) return fallback;
   try {
@@ -16,7 +17,7 @@ function writeJSON(file, data) {
   fs.writeFileSync(file, JSON.stringify(data, null, 2));
 }
 
-// 🟢 Public — get all events
+// ✅ Public — get all events (for everyone)
 exports.getAllEvents = (req, res) => {
   try {
     const events = readJSON(EVENTS_FILE);
@@ -27,16 +28,16 @@ exports.getAllEvents = (req, res) => {
   }
 };
 
-// 🟠 Admin — create event
+// ✅ Admin — create event and store in file
 exports.createEvent = (req, res) => {
   try {
-    const { title, date, time } = req.body || {};
+    const { title, date, time } = req.body;
     const userEmail = req.user?.email || "admin@system";
 
     if (!title || !date) {
       return res
         .status(400)
-        .json({ success: false, message: "Title and date are required." });
+        .json({ success: false, message: "Title and date are required" });
     }
 
     const events = readJSON(EVENTS_FILE);
@@ -54,7 +55,7 @@ exports.createEvent = (req, res) => {
 
     res.json({
       success: true,
-      message: "Event added successfully.",
+      message: "Event added successfully",
       event: newEvent,
     });
   } catch (err) {

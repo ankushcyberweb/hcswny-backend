@@ -6,7 +6,7 @@ const eventController = require("../controllers/eventController");
 // 🟢 Public — anyone can view all events
 router.get("/", eventController.getAllEvents);
 
-// 🟠 Admin — only admin can create events
+// 🟠 Admin — only admin can add events
 router.post(
   "/",
   authMiddleware,
