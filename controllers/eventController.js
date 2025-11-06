@@ -1,23 +1,31 @@
 const fs = require("fs");
 const path = require("path");
 
-const EVENTS_FILE = path.join(__dirname, "..", "events_data.json");
+// ✅ Use absolute path from current working directory
+const EVENTS_FILE = path.resolve(__dirname, "../events_data.json");
 
-// ✅ Helper functions to read/write JSON safely
+// 🧩 Helper functions
 function readJSON(file, fallback = []) {
-  if (!fs.existsSync(file)) return fallback;
   try {
-    return JSON.parse(fs.readFileSync(file, "utf8"));
-  } catch {
+    if (!fs.existsSync(file)) return fallback;
+    const data = fs.readFileSync(file, "utf8");
+    return JSON.parse(data || "[]");
+  } catch (err) {
+    console.error("❌ Error reading JSON:", err);
     return fallback;
   }
 }
 
 function writeJSON(file, data) {
-  fs.writeFileSync(file, JSON.stringify(data, null, 2));
+  try {
+    fs.writeFileSync(file, JSON.stringify(data, null, 2), "utf8");
+    console.log("✅ Event data saved successfully!");
+  } catch (err) {
+    console.error("❌ Error writing JSON:", err);
+  }
 }
 
-// ✅ Public — get all events (for everyone)
+// 🟢 Public - anyone can get events
 exports.getAllEvents = (req, res) => {
   try {
     const events = readJSON(EVENTS_FILE);
@@ -28,7 +36,7 @@ exports.getAllEvents = (req, res) => {
   }
 };
 
-// ✅ Admin — create event and store in file
+// 🟠 Admin - create event
 exports.createEvent = (req, res) => {
   try {
     const { title, date, time } = req.body;
@@ -37,10 +45,12 @@ exports.createEvent = (req, res) => {
     if (!title || !date) {
       return res
         .status(400)
-        .json({ success: false, message: "Title and date are required" });
+        .json({ success: false, message: "Title and date required" });
     }
 
+    // 🧾 Read existing events
     const events = readJSON(EVENTS_FILE);
+
     const newEvent = {
       id: Date.now(),
       title,
@@ -50,8 +60,11 @@ exports.createEvent = (req, res) => {
       createdAt: new Date().toISOString(),
     };
 
+    // ✍️ Save to file
     events.push(newEvent);
     writeJSON(EVENTS_FILE, events);
+
+    console.log("✅ New event added:", newEvent.title);
 
     res.json({
       success: true,
