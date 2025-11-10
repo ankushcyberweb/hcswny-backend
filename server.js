@@ -6,12 +6,16 @@ const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const nodemailer = require("nodemailer");
 
+// ✅ (Optional) Firebase — import only if Firestore or Firebase Auth is used
+// If your firebaseConfig.js is located one level up from backend folder:
+// const { db } = require("../firebaseConfig.js");
+
 // ---------------- INIT APP ----------------
 const app = express();
 app.use(express.json());
 app.use(
   cors({
-    origin: "*", // ✅ Allow all origins for testing — tighten later if needed
+    origin: "*", // Allow all origins for testing; restrict later if needed
   })
 );
 
@@ -160,26 +164,52 @@ app.post("/auth/reset-password", async (req, res) => {
   });
 });
 
-// ---------------- AUTH MIDDLEWARE ----------------
-function authRequired(req, res, next) {
-  const header = req.headers.authorization;
-  if (!header)
-    return res
-      .status(401)
-      .json({ success: false, message: "No token provided" });
-
+// ---------------- ENQUIRY FORM ROUTE ----------------
+app.post("/send-enquiry", async (req, res) => {
   try {
-    const token = header.split(" ")[1];
-    req.user = jwt.verify(token, JWT_SECRET);
-    next();
-  } catch {
-    return res.status(401).json({ success: false, message: "Invalid token" });
-  }
-}
+    const { firstName, lastName, email, phone, membershipType, message } =
+      req.body;
 
-// ---------------- ROUTE MOUNTING ----------------
-const eventRoutes = require("./routes/eventRoutes"); // ✅ your new route file
-app.use("/events", eventRoutes);
+    if (!firstName || !lastName || !email || !membershipType || !message) {
+      return res
+        .status(400)
+        .json({ success: false, error: "Missing required fields" });
+    }
+
+    const transporter = nodemailer.createTransport({
+      service: "gmail",
+      auth: {
+        user: ADMIN_EMAIL,
+        pass: ADMIN_APP_PASSWORD,
+      },
+    });
+
+    const mailOptions = {
+      from: ADMIN_EMAIL,
+      to: ADMIN_EMAIL,
+      subject: `New Enquiry from ${firstName} ${lastName}`,
+      text: `
+New enquiry received:
+
+Name: ${firstName} ${lastName}
+Email: ${email}
+Phone: ${phone || "N/A"}
+Membership Type: ${membershipType}
+Message: ${message}
+      `,
+    };
+
+    await transporter.sendMail(mailOptions);
+
+    console.log("✅ Enquiry email sent successfully!");
+    res.json({ success: true });
+  } catch (error) {
+    console.error("❌ Email send failed:", error);
+    res
+      .status(500)
+      .json({ success: false, error: "Failed to send enquiry email" });
+  }
+});
 
 // ---------------- HEALTH CHECK ----------------
 app.get("/", (req, res) => {

@@ -3,10 +3,10 @@ const router = express.Router();
 const authMiddleware = require("../utils/authMiddleware");
 const eventController = require("../controllers/eventController");
 
-// 🟢 Public — anyone can view all events
+// 🟢 Public — get all events
 router.get("/", eventController.getAllEvents);
 
-// 🟠 Admin — only admin can add events
+// 🟠 Admin — add new event
 router.post(
   "/",
   authMiddleware,
